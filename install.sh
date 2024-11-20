@@ -94,7 +94,7 @@ if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
 fi
 
 # Сохранение учетных данных
-CREDENTIALS_FILE="$HOME/vps-browser-credentials.json"
+CREDENTIALS_FILE="$HOME/vps-browser-credentials-$container_name.json"
 cat <<EOL > "$CREDENTIALS_FILE"
 {
   "username": "$USERNAME",
