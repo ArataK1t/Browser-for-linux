@@ -99,8 +99,8 @@ else
   show "Образ Docker с Chromium успешно загружен."
 fi
 
-# Запуск контейнера с прокси
-show "Запуск контейнера с Chromium с прокси..."
+# Запуск контейнера
+show "Запуск контейнера с Chromium..."
 docker run -d --name "$container_name" \
   --privileged \
   -e TITLE="Chromium Browser" \
@@ -108,12 +108,12 @@ docker run -d --name "$container_name" \
   -e PUID=1000 \
   -e PGID=1000 \
   -e LANGUAGE=en_US.UTF-8 \
+  -e CHROMIUM_FLAGS="$proxy_flag" \
   -v "$config_dir:/config" \
   -p "$port:3000" \
   --shm-size="2gb" \
   --restart unless-stopped \
-  lscr.io/linuxserver/chromium:latest \
-  $proxy_flag
+  lscr.io/linuxserver/chromium:latest
 
 if [ $? -eq 0 ]; then
   show "Контейнер с Chromium успешно запущен."
@@ -121,3 +121,4 @@ if [ $? -eq 0 ]; then
 else
   error "Не удалось запустить контейнер с Chromium."
 fi
+
