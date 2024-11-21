@@ -71,17 +71,17 @@ fi
 
 # Настройка прокси
 read -p "Использовать прокси? [y/n]: " proxy_choice
-proxy_flag=""
+proxy_env=""
 if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
   read -p "Выберите тип прокси (http/socks5): " proxy_type
   case "$proxy_type" in
     http)
       read -p "Введите HTTP-прокси (в формате USER:PASS@IP:PORT): " proxy
-      proxy_flag="--proxy-server=http://$proxy"
+      proxy_env="-e HTTP_PROXY=http://$proxy -e HTTPS_PROXY=http://$proxy"
       ;;
     socks5)
       read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
-      proxy_flag="--proxy-server=socks5://$proxy"
+      proxy_env="-e ALL_PROXY=socks5://$proxy"
       ;;
     *)
       error "Неверный тип прокси. Выберите 'http' или 'socks5'."
@@ -89,6 +89,29 @@ if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
       ;;
   esac
 fi
+
+# Запрашиваем имя пользователя
+read -p "Введите имя пользователя: " USERNAME
+
+# Запрашиваем пароль с подтверждением
+read -s -p "Введите пароль: " PASSWORD
+echo  # Переход на новую строку
+read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
+echo
+
+if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+  error "Пароли не совпадают. Пожалуйста, запустите скрипт заново и введите пароли правильно."
+  exit 1
+fi
+
+# Сохранение учетных данных
+CREDENTIALS_FILE="$HOME/vps-browser-credentials-$container_name.json"
+cat <<EOL > "$CREDENTIALS_FILE"
+{
+  "username": "$USERNAME",
+  "password": "$PASSWORD"
+}
+EOL
 
 # Проверка и загрузка образа Docker с Chromium
 show "Загрузка последнего образа Docker с Chromium..."
@@ -107,8 +130,10 @@ docker run -d --name "$container_name" \
   -e DISPLAY=:1 \
   -e PUID=1000 \
   -e PGID=1000 \
+  -e CUSTOM_USER="$USERNAME" \
+  -e PASSWORD="$PASSWORD" \
   -e LANGUAGE=en_US.UTF-8 \
-  -e CHROMIUM_FLAGS="$proxy_flag" \
+  $proxy_env \
   -v "$config_dir:/config" \
   -p "$port:3000" \
   --shm-size="2gb" \
@@ -118,7 +143,7 @@ docker run -d --name "$container_name" \
 if [ $? -eq 0 ]; then
   show "Контейнер с Chromium успешно запущен."
   show "Откройте этот адрес: http://$IP:$port/"
+  show "Имя пользователя: $USERNAME"
 else
   error "Не удалось запустить контейнер с Chromium."
 fi
-
