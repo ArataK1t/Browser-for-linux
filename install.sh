@@ -73,7 +73,7 @@ fi
 read -p "Использовать прокси? [y/n]: " proxy_choice
 proxy_http=""
 proxy_https=""
-proxy_socks5=""
+proxy_socks5h=""
 if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
   read -p "Выберите тип прокси (http/socks5): " proxy_type
   case "$proxy_type" in
@@ -84,7 +84,7 @@ if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
       ;;
     socks5)
       read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
-      proxy_socks5="-e SOCKS5_PROXY=socks5://$proxy"
+      proxy_socks5h="-e ALL_PROXY=socks5h://$proxy"
       ;;
     *)
       error "Неверный тип прокси. Выберите 'http' или 'socks5'."
@@ -138,7 +138,7 @@ docker run -d --name "$container_name" \
   -e LANGUAGE=en_US.UTF-8 \
   $proxy_http \
   $proxy_https \
-  $proxy_socks5 \
+  $proxy_socks5h \
   -v "$config_dir:/config" \
   -p "$port:3000" \
   --shm-size="2gb" \
