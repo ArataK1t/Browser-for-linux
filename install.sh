@@ -47,7 +47,7 @@ else
 fi
 
 # Получение внешнего IP-адреса
-IP=$(curl -s ifconfig.me)
+IP=$(curl -4 -s ifconfig.me)
 if [ -z "$IP" ]; then
   error "Не удалось получить внешний IP адрес."
   exit 1
@@ -70,42 +70,48 @@ else
 fi
 
 # Настройка прокси
-read -p "Использовать прокси? [y/n]: " proxy_choice
 proxy_http=""
 proxy_https=""
 proxy_socks5=""
+
+read -p "Использовать прокси? [y/n]: " proxy_choice
 if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
-  read -p "Выберите тип прокси (http/socks5): " proxy_type
-  case "$proxy_type" in
-    http)
-      read -p "Введите HTTP-прокси (в формате USER:PASS@IP:PORT): " proxy
-      proxy_http="-e HTTP_PROXY=http://$proxy"
-      proxy_https="-e HTTPS_PROXY=http://$proxy"
-      ;;
-    socks5)
-      read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
-      proxy_socks5="-e ALL_PROXY=socks5://$proxy"
-      ;;
-    *)
-      error "Неверный тип прокси. Выберите 'http' или 'socks5'."
-      exit 1
-      ;;
-  esac
+  while true; do
+    read -p "Выберите тип прокси (http/socks5): " proxy_type
+    case "$proxy_type" in
+      http)
+        read -p "Введите HTTP-прокси (в формате USER:PASS@IP:PORT): " proxy
+        proxy_http="-e HTTP_PROXY=http://$proxy"
+        proxy_https="-e HTTPS_PROXY=http://$proxy"
+        break
+        ;;
+      socks5)
+        read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
+        proxy_socks5="-e ALL_PROXY=socks5://$proxy"
+        break
+        ;;
+      *)
+        error "Неверный тип прокси. Выберите 'http' или 'socks5'."
+        ;;
+    esac
+  done
 fi
 
 # Запрашиваем имя пользователя
 read -p "Введите имя пользователя: " USERNAME
 
 # Запрашиваем пароль с подтверждением
-read -s -p "Введите пароль: " PASSWORD
-echo  # Переход на новую строку
-read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
-echo
-
-if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-  error "Пароли не совпадают. Пожалуйста, запустите скрипт заново и введите пароли правильно."
-  exit 1
-fi
+while true; do
+  read -s -p "Введите пароль: " PASSWORD
+  echo  # Переход на новую строку
+  read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
+  echo
+  if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+    error "Пароли не совпадают. Повторите ввод."
+  else
+    break
+  fi
+done
 
 # Сохранение учетных данных
 CREDENTIALS_FILE="$HOME/vps-browser-credentials-$container_name.json"
