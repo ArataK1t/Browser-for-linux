@@ -152,8 +152,7 @@ docker run -d --name "$container_name" \
   -p "$port:3000" \
   --shm-size="2gb" \
   --restart unless-stopped \
-  lscr.io/linuxserver/chromium:latest \
-  --proxy-server="$chromium_proxy_args"
+  lscr.io/linuxserver/chromium:latest
 
 if [ $? -eq 0 ]; then
   show "Контейнер с Chromium успешно запущен."
