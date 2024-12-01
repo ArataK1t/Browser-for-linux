@@ -73,6 +73,7 @@ fi
 proxy_http=""
 proxy_https=""
 proxy_socks5=""
+chromium_proxy_args=""
 
 read -p "Использовать прокси? [y/n]: " proxy_choice
 if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
@@ -83,11 +84,13 @@ if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
         read -p "Введите HTTP-прокси (в формате USER:PASS@IP:PORT): " proxy
         proxy_http="-e HTTP_PROXY=http://$proxy"
         proxy_https="-e HTTPS_PROXY=http://$proxy"
+        chromium_proxy_args="--proxy-server=http://$proxy"
         break
         ;;
       socks5)
         read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
         proxy_socks5="-e ALL_PROXY=socks5://$proxy"
+        chromium_proxy_args="--proxy-server=socks5://$proxy"
         break
         ;;
       *)
@@ -150,6 +153,7 @@ docker run -d --name "$container_name" \
   --shm-size="2gb" \
   --restart unless-stopped \
   lscr.io/linuxserver/chromium:latest
+  $chromium_proxy_args
 
 if [ $? -eq 0 ]; then
   show "Контейнер с Chromium успешно запущен."
