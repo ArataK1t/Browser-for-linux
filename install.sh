@@ -19,8 +19,8 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Установка зависимостей
-show "Установка зависимостей..."
+# Обновление системы и установка зависимостей
+show "Обновление системы и установка зависимостей..."
 sudo apt update && sudo apt upgrade -y
 
 for package in git curl python3 python3-pip; do
@@ -98,24 +98,50 @@ if [ ${#PROXIES[@]} -lt "$container_count" ]; then
   exit 1
 fi
 
-# Функция генерации случайного User-Agent с помощью Python
-generate_user_agent() {
-  python3 - <<END
-from user_agents import generate_user_agent
-print(generate_user_agent(device_type="desktop"))
-END
-}
-
-# Генерация случайных параметров контейнера
+# Генерация случайных настроек для каждого контейнера
 generate_random_config() {
   width=$(( RANDOM % 400 + 1366 ))                     # Случайное разрешение (ширина)
   height=$(( RANDOM % 200 + 768 ))                    # Случайное разрешение (высота)
   scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}') # Масштаб
   timezone=$(shuf -n 1 /usr/share/zoneinfo/zone.tab | awk '{print $3}' | head -1) # Таймзона
   language=$(shuf -e en_US fr_FR de_DE es_ES ru_RU -n 1)                         # Язык
-  user_agent=$(generate_user_agent)                                             # User-Agent
+  user_agent=$(python3 -c "from user_agents import generate_user_agent; print(generate_user_agent(device_type='desktop'))") # User-Agent
   echo "$width,$height,$scale,$timezone,$language,$user_agent"
 }
+
+# Запрашиваем имя пользователя
+read -p "Введите имя пользователя: " USERNAME
+
+# Запрашиваем пароль с подтверждением
+while true; do
+  read -s -p "Введите пароль: " PASSWORD
+  echo  # Переход на новую строку
+  read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
+  echo
+  if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+    error "Пароли не совпадают. Повторите ввод."
+  else
+    break
+  fi
+done
+
+# Сохранение учетных данных
+CREDENTIALS_FILE="$HOME/vps-browser-credentials-$container_name.json"
+cat <<EOL > "$CREDENTIALS_FILE"
+{
+  "username": "$USERNAME",
+  "password": "$PASSWORD"
+}
+EOL
+
+# Проверка и загрузка образа Docker с Chromium
+show "Загрузка последнего образа Docker с Chromium..."
+if ! docker pull linuxserver/chromium:latest; then
+  error "Не удалось загрузить образ Docker с Chromium."
+  exit 1
+else
+  show "Образ Docker с Chromium успешно загружен."
+fi
 
 # Создание контейнеров
 for ((i=0; i<container_count; i++)); do
@@ -124,13 +150,21 @@ for ((i=0; i<container_count; i++)); do
 
   # Разделяем строку на учетные данные (user:pass) и детали прокси (ip:port)
   IFS='@' read -r credentials proxy_details <<< "$proxy"
+
+  # Разделяем учетные данные на user и pass
   IFS=':' read -r user pass <<< "$credentials"
+
+  # Разделяем детали прокси на ip и port
   IFS=':' read -r ip port <<< "$proxy_details"
 
   # Прокси HTTP
   proxy_http="-e HTTP_PROXY=http://$user:$pass@$ip:$port"
   proxy_https="-e HTTPS_PROXY=http://$user:$pass@$ip:$port"
   chromium_proxy_args="--proxy-server=http://$user:$pass@$ip:$port"
+
+  # Прокси SOCKS5
+  proxy_socks5="-e ALL_PROXY=socks5://$user:$pass@$ip:$port"
+  chromium_proxy_args="--proxy-server=socks5://$user:$pass@$ip:$port"
 
   # Генерация случайных параметров
   config=$(generate_random_config)
@@ -160,12 +194,21 @@ for ((i=0; i<container_count; i++)); do
   show "Запуск контейнера $container_name_unique с портом $current_port..."
   docker run -d --name "$container_name_unique" \
     --privileged \
+    -e TITLE="Chromium Browser" \
+    -e DISPLAY=:1 \
+    -e PUID=1000 \
+    -e PGID=1000 \
+    -e CUSTOM_USER="$USERNAME" \
+    -e PASSWORD="$PASSWORD" \
     -e LANGUAGE="$language" \
     -e TZ="$timezone" \
     -e USER_AGENT="$user_agent" \
-    --shm-size="2gb" \
+    $proxy_http \
+    $proxy_https \
+    $proxy_socks5 \
     -v "$config_dir:/config" \
     -p "$current_port:3000" \
+    --shm-size="2gb" \
     --restart unless-stopped \
     lscr.io/linuxserver/chromium:latest \
     --window-size="${width}x${height}" \
@@ -175,10 +218,6 @@ for ((i=0; i<container_count; i++)); do
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
     show "Откройте этот адрес: http://$IP:$current_port/"
-    show "Параметры контейнера:"
-    show "  ➤ User-Agent: $user_agent"
-    show "  ➤ Разрешение экрана: ${width}x${height}, масштаб: $scale"
-    show "  ➤ Язык: $language, Таймзона: $timezone"
   else
     error "Не удалось запустить контейнер $container_name_unique."
   fi
