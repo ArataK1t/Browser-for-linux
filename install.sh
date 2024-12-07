@@ -19,11 +19,11 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Обновление системы и установка зависимостей
-show "Обновление системы и установка зависимостей..."
+# Установка зависимостей
+show "Установка зависимостей..."
 sudo apt update && sudo apt upgrade -y
 
-for package in git curl; do
+for package in git curl python3 python3-pip; do
   if ! [ -x "$(command -v $package)" ]; then
     show "Устанавливаю $package..."
     sudo apt install -y $package
@@ -31,6 +31,8 @@ for package in git curl; do
     show "$package уже установлен."
   fi
 done
+
+pip3 install --user user-agents
 
 # Проверка и установка Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -53,111 +55,132 @@ if [ -z "$IP" ]; then
   exit 1
 fi
 
-# Запрашиваем имя контейнера
-read -p "Введите имя контейнера: " container_name
+# Запрашиваем количество контейнеров
+read -p "Сколько контейнеров хотите создать? " container_count
 
-# Создание уникальной конфигурационной папки
-config_dir="$HOME/chromium/config_$container_name"
-mkdir -p "$config_dir"
+# Запрашиваем базовое имя контейнера
+read -p "Введите базовое имя контейнера: " container_name
 
-# Выбор порта
+# Запрашиваем стартовый порт
 default_port=10000
-read -p "Оставить порт по умолчанию (${default_port})? [y/n]: " port_choice
-if [[ "$port_choice" =~ ^[nN]$ ]]; then
-  read -p "Введите порт для браузера: " port
-else
-  port=$default_port
-fi
+read -p "С какого порта начать? (По умолчанию $default_port): " start_port
+start_port=${start_port:-$default_port}
 
-# Настройка прокси
-proxy_http=""
-proxy_https=""
-proxy_socks5=""
-chromium_proxy_args=""
-
-read -p "Использовать прокси? [y/n]: " proxy_choice
-if [[ "$proxy_choice" =~ ^[yY]$ ]]; then
-  while true; do
-    read -p "Выберите тип прокси (http/socks5): " proxy_type
-    case "$proxy_type" in
-      http)
-        read -p "Введите HTTP-прокси (в формате USER:PASS@IP:PORT): " proxy
-        proxy_http="-e HTTP_PROXY=http://$proxy"
-        proxy_https="-e HTTPS_PROXY=http://$proxy"
-        chromium_proxy_args="--proxy-server=http://$proxy"
-        break
-        ;;
-      socks5)
-        read -p "Введите SOCKS5-прокси (в формате USER:PASS@IP:PORT): " proxy
-        proxy_socks5="-e ALL_PROXY=socks5://$proxy"
-        chromium_proxy_args="--proxy-server=socks5://$proxy"
-        break
-        ;;
-      *)
-        error "Неверный тип прокси. Выберите 'http' или 'socks5'."
-        ;;
-    esac
-  done
-fi
-
-# Запрашиваем имя пользователя
-read -p "Введите имя пользователя: " USERNAME
-
-# Запрашиваем пароль с подтверждением
-while true; do
-  read -s -p "Введите пароль: " PASSWORD
-  echo  # Переход на новую строку
-  read -s -p "Подтвердите пароль: " PASSWORD_CONFIRM
-  echo
-  if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-    error "Пароли не совпадают. Повторите ввод."
+# Проверка уникальности порта
+function check_port() {
+  port_in_use=$(lsof -i -P -n | grep -w "$1")
+  if [ -n "$port_in_use" ]; then
+    echo "Порт $1 уже занят. Выберите другой порт."
+    return 1
   else
-    break
+    return 0
+  fi
+}
+
+# Путь к файлу с прокси
+PROXY_FILE="$HOME/proxies.txt"
+
+# Проверка наличия файла с прокси
+if [ ! -f "$PROXY_FILE" ]; then
+  error "Файл с прокси не найден. Пожалуйста, создайте файл $PROXY_FILE и введите список прокси."
+  exit 1
+fi
+
+# Чтение прокси из файла
+mapfile -t PROXIES < "$PROXY_FILE"
+
+# Удаление файла после того, как прокси были считаны
+rm -f "$PROXY_FILE"
+
+# Проверка, что количество прокси не меньше количества контейнеров
+if [ ${#PROXIES[@]} -lt "$container_count" ]; then
+  error "Количество прокси меньше, чем количество контейнеров. Скрипт завершает работу."
+  exit 1
+fi
+
+# Функция генерации случайного User-Agent с помощью Python
+generate_user_agent() {
+  python3 - <<END
+from user_agents import generate_user_agent
+print(generate_user_agent(device_type="desktop"))
+END
+}
+
+# Генерация случайных параметров контейнера
+generate_random_config() {
+  width=$(( RANDOM % 400 + 1366 ))                     # Случайное разрешение (ширина)
+  height=$(( RANDOM % 200 + 768 ))                    # Случайное разрешение (высота)
+  scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}') # Масштаб
+  timezone=$(shuf -n 1 /usr/share/zoneinfo/zone.tab | awk '{print $3}' | head -1) # Таймзона
+  language=$(shuf -e en_US fr_FR de_DE es_ES ru_RU -n 1)                         # Язык
+  user_agent=$(generate_user_agent)                                             # User-Agent
+  echo "$width,$height,$scale,$timezone,$language,$user_agent"
+}
+
+# Создание контейнеров
+for ((i=0; i<container_count; i++)); do
+  # Используем прокси из файла для каждого контейнера
+  proxy="${PROXIES[$i]}"
+
+  # Разделяем строку на учетные данные (user:pass) и детали прокси (ip:port)
+  IFS='@' read -r credentials proxy_details <<< "$proxy"
+  IFS=':' read -r user pass <<< "$credentials"
+  IFS=':' read -r ip port <<< "$proxy_details"
+
+  # Прокси HTTP
+  proxy_http="-e HTTP_PROXY=http://$user:$pass@$ip:$port"
+  proxy_https="-e HTTPS_PROXY=http://$user:$pass@$ip:$port"
+  chromium_proxy_args="--proxy-server=http://$user:$pass@$ip:$port"
+
+  # Генерация случайных параметров
+  config=$(generate_random_config)
+  width=$(echo "$config" | cut -d, -f1)
+  height=$(echo "$config" | cut -d, -f2)
+  scale=$(echo "$config" | cut -d, -f3)
+  timezone=$(echo "$config" | cut -d, -f4)
+  language=$(echo "$config" | cut -d, -f5)
+  user_agent=$(echo "$config" | cut -d, -f6)
+
+  current_port=$((start_port + i * 10))  # Каждый следующий контейнер на 10 портов дальше
+
+  # Проверка, что порт свободен
+  if ! check_port "$current_port"; then
+    error "Невозможно запустить контейнер на порту $current_port, так как он занят."
+    continue
+  fi
+
+  # Генерация уникального имени контейнера
+  container_name_unique="${container_name}$i"
+
+  # Создание уникальной конфигурационной папки
+  config_dir="$HOME/chromium/config_$container_name_unique"
+  mkdir -p "$config_dir"
+
+  # Запуск контейнера
+  show "Запуск контейнера $container_name_unique с портом $current_port..."
+  docker run -d --name "$container_name_unique" \
+    --privileged \
+    -e LANGUAGE="$language" \
+    -e TZ="$timezone" \
+    -e USER_AGENT="$user_agent" \
+    --shm-size="2gb" \
+    -v "$config_dir:/config" \
+    -p "$current_port:3000" \
+    --restart unless-stopped \
+    lscr.io/linuxserver/chromium:latest \
+    --window-size="${width}x${height}" \
+    --force-device-scale-factor="$scale" \
+    --user-agent="$user_agent"
+
+  if [ $? -eq 0 ]; then
+    show "Контейнер $container_name_unique успешно запущен."
+    show "Откройте этот адрес: http://$IP:$current_port/"
+    show "Параметры контейнера:"
+    show "  ➤ User-Agent: $user_agent"
+    show "  ➤ Разрешение экрана: ${width}x${height}, масштаб: $scale"
+    show "  ➤ Язык: $language, Таймзона: $timezone"
+  else
+    error "Не удалось запустить контейнер $container_name_unique."
   fi
 done
 
-# Сохранение учетных данных
-CREDENTIALS_FILE="$HOME/vps-browser-credentials-$container_name.json"
-cat <<EOL > "$CREDENTIALS_FILE"
-{
-  "username": "$USERNAME",
-  "password": "$PASSWORD"
-}
-EOL
-
-# Проверка и загрузка образа Docker с Chromium
-show "Загрузка последнего образа Docker с Chromium..."
-if ! docker pull linuxserver/chromium:latest; then
-  error "Не удалось загрузить образ Docker с Chromium."
-  exit 1
-else
-  show "Образ Docker с Chromium успешно загружен."
-fi
-
-# Запуск контейнера
-show "Запуск контейнера с Chromium..."
-docker run -d --name "$container_name" \
-  --privileged \
-  -e TITLE="Chromium Browser" \
-  -e DISPLAY=:1 \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e CUSTOM_USER="$USERNAME" \
-  -e PASSWORD="$PASSWORD" \
-  -e LANGUAGE=en_US.UTF-8 \
-  $proxy_http \
-  $proxy_https \
-  $proxy_socks5 \
-  -v "$config_dir:/config" \
-  -p "$port:3000" \
-  --shm-size="2gb" \
-  --restart unless-stopped \
-  lscr.io/linuxserver/chromium:latest
-
-if [ $? -eq 0 ]; then
-  show "Контейнер с Chromium успешно запущен."
-  show "Откройте этот адрес: http://$IP:$port/"
-  show "Имя пользователя: $USERNAME"
-else
-  error "Не удалось запустить контейнер с Chromium."
-fi
