@@ -135,7 +135,7 @@ fi
 
 # Функция для получения случайного User-Agent (только десктопные)
 generate_random_config() {
-  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
+  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random.desktop)')
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
