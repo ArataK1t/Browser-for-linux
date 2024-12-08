@@ -143,6 +143,7 @@ ua = UserAgent()
 # Используем ua.get_random_user_agent() вместо random()
 print(ua.get_random_user_agent())
 ")
+echo "Передача USER_AGENT: $user_agent"
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
@@ -176,7 +177,7 @@ for ((i=0; i<container_count; i++)); do
 
   # Генерация случайных настроек для каждого контейнера
   config=$(generate_random_config "$ip")
-  user_agent_string=$(echo "$config" | cut -d, -f1)
+  user_agent=$(echo "$config" | cut -d, -f1)
   country=$(echo "$config" | cut -d, -f2)
   timezone=$(echo "$config" | cut -d, -f3)
   language=$(echo "$config" | cut -d, -f4)
