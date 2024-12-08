@@ -23,7 +23,7 @@ fi
 show "Обновление системы и установка зависимостей..."
 sudo apt update && sudo apt upgrade -y
 
-for package in git curl python3 python3-pip; do
+for package in git curl python3 python3-pip jq; do
   if ! [ -x "$(command -v $package)" ]; then
     show "Устанавливаю $package..."
     sudo apt install -y $package
@@ -32,7 +32,7 @@ for package in git curl python3 python3-pip; do
   fi
 done
 
-pip3 install --user user-agents
+pip3 install --user fake_useragent
 
 # Проверка и установка Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -100,13 +100,23 @@ fi
 
 # Генерация случайных настроек для каждого контейнера
 generate_random_config() {
-  width=$(( RANDOM % 400 + 1366 ))                     # Случайное разрешение (ширина)
-  height=$(( RANDOM % 200 + 768 ))                    # Случайное разрешение (высота)
-  scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}') # Масштаб
-  timezone=$(shuf -n 1 /usr/share/zoneinfo/zone.tab | awk '{print $3}' | head -1) # Таймзона
-  language=$(shuf -e en_US fr_FR de_DE es_ES ru_RU -n 1)                         # Язык
-  user_agent=$(python3 -c "from user_agents import generate_user_agent; print(generate_user_agent(device_type='desktop'))") # User-Agent
-  echo "$width,$height,$scale,$timezone,$language,$user_agent"
+  # Используем fake_useragent для генерации фальшивого User-Agent
+  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
+
+  # Определение языка и таймзоны на основе прокси
+  proxy_ip="$1"
+  geo_info=$(curl -s "http://ip-api.com/json/$proxy_ip?fields=country,timezone,languages")
+
+  country=$(echo "$geo_info" | jq -r '.country')
+  timezone=$(echo "$geo_info" | jq -r '.timezone')
+  language=$(echo "$geo_info" | jq -r '.languages' | cut -d',' -f1)  # Используем первый язык
+
+  # Случайные размеры экрана и масштаб
+  width=$(( RANDOM % 400 + 1366 ))  # Случайная ширина
+  height=$(( RANDOM % 200 + 768 )) # Случайная высота
+  scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}')  # Масштаб
+
+  echo "$user_agent,$country,$timezone,$language,$width,$height,$scale"
 }
 
 # Запрашиваем имя пользователя
@@ -157,23 +167,15 @@ for ((i=0; i<container_count; i++)); do
   # Разделяем детали прокси на ip и port
   IFS=':' read -r ip port <<< "$proxy_details"
 
-  # Прокси HTTP
-  proxy_http="-e HTTP_PROXY=http://$user:$pass@$ip:$port"
-  proxy_https="-e HTTPS_PROXY=http://$user:$pass@$ip:$port"
-  chromium_proxy_args="--proxy-server=http://$user:$pass@$ip:$port"
-
-  # Прокси SOCKS5
-  proxy_socks5="-e ALL_PROXY=socks5://$user:$pass@$ip:$port"
-  chromium_proxy_args="--proxy-server=socks5://$user:$pass@$ip:$port"
-
-  # Генерация случайных параметров
-  config=$(generate_random_config)
-  width=$(echo "$config" | cut -d, -f1)
-  height=$(echo "$config" | cut -d, -f2)
-  scale=$(echo "$config" | cut -d, -f3)
-  timezone=$(echo "$config" | cut -d, -f4)
-  language=$(echo "$config" | cut -d, -f5)
-  user_agent=$(echo "$config" | cut -d, -f6)
+  # Генерация случайных параметров для прокси
+  config=$(generate_random_config "$ip")
+  user_agent=$(echo "$config" | cut -d, -f1)
+  country=$(echo "$config" | cut -d, -f2)
+  timezone=$(echo "$config" | cut -d, -f3)
+  language=$(echo "$config" | cut -d, -f4)
+  width=$(echo "$config" | cut -d, -f5)
+  height=$(echo "$config" | cut -d, -f6)
+  scale=$(echo "$config" | cut -d, -f7)
 
   current_port=$((start_port + i * 10))  # Каждый следующий контейнер на 10 портов дальше
 
@@ -203,9 +205,6 @@ for ((i=0; i<container_count; i++)); do
     -e LANGUAGE="$language" \
     -e TZ="$timezone" \
     -e USER_AGENT="$user_agent" \
-    $proxy_http \
-    $proxy_https \
-    $proxy_socks5 \
     -v "$config_dir:/config" \
     -p "$current_port:3000" \
     --shm-size="2gb" \
@@ -222,4 +221,5 @@ for ((i=0; i<container_count; i++)); do
     error "Не удалось запустить контейнер $container_name_unique."
   fi
 done
+
 
