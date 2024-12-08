@@ -101,7 +101,7 @@ fi
 # Генерация случайных настроек для каждого контейнера
 generate_random_config() {
   # Используем fake_useragent для генерации фальшивого User-Agent (только десктопные)
-  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(verify_ssl=False); print(ua.random)')
+  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
