@@ -140,7 +140,7 @@ generate_random_config() {
 from random_user_agent.user_agent import UserAgent
 
 # Указываем, что нам нужны только десктопные User-Agent'ы
-ua = UserAgent(software_names=['chrome', 'firefox', 'safari'])
+ua = UserAgent(software_names=['chrome', 'firefox', 'safari'], platforms=['windows', 'mac', 'linux'])
 
 # Получаем случайный User-Agent для десктопа
 user_agent = ua.get_random_user_agent()
