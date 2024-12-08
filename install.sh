@@ -135,23 +135,25 @@ fi
 
 # Генерация случайных настроек для каждого контейнера
 generate_random_config() {
-  # Используем random-user-agent для генерации фальшивого User-Agent (только десктопные)
-  from random_user_agent.user_agent import UserAgent
-  from random_user_agent.params import SoftwareAgent, HardwareAgent
+  # Генерация случайного User-Agent с помощью Python, вызванного внутри bash-скрипта
+  user_agent=$(python3 -c "
+from random_user_agent.user_agent import UserAgent
+from random_user_agent.params import SoftwareAgent, HardwareAgent
 
-  # Определяем типы агентов
-  software_names = ['chrome', 'firefox', 'safari']
-  hardware_types = ['desktop']  # Только десктопные
+# Определяем типы агентов
+software_names = ['chrome', 'firefox', 'safari']
+hardware_types = ['desktop']  # Только десктопные
 
-  # Создаём агенты
-  software_agent = SoftwareAgent(software_names)
-  hardware_agent = HardwareAgent(hardware_types)
+# Создаём агенты
+software_agent = SoftwareAgent(software_names)
+hardware_agent = HardwareAgent(hardware_types)
 
-  # Генерируем случайный User-Agent
-  user_agent = UserAgent(software_agent, hardware_agent)
+# Генерируем случайный User-Agent
+ua = UserAgent(software_agent, hardware_agent)
 
-  # Печатаем случайный десктопный User-Agent
-  user_agent_string = user_agent.get_random_user_agent()
+# Печатаем случайный десктопный User-Agent
+print(ua.get_random_user_agent())
+")
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
@@ -166,7 +168,7 @@ generate_random_config() {
   height=$(( RANDOM % 200 + 768 )) # Случайная высота
   scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}')  # Масштаб
 
-  echo "$user_agent_string,$country,$timezone,$language,$width,$height,$scale"
+  echo "$user_agent,$country,$timezone,$language,$width,$height,$scale"
 }
 
 # Генерация случайных параметров для прокси
@@ -226,7 +228,7 @@ for ((i=0; i<container_count; i++)); do
     -e LANGUAGE="$language" \
     -e LANG="$language" \
     -e TZ="$timezone" \
-    -e USER_AGENT="$user_agent_string" \
+    -e USER_AGENT="$user_agent" \
     $proxy_http \
     $proxy_https \
     -v "$config_dir:/config" \
