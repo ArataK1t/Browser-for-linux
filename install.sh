@@ -138,21 +138,10 @@ generate_random_config() {
   # Генерация случайного User-Agent с помощью Python, вызванного внутри bash-скрипта
   user_agent=$(python3 -c "
 from random_user_agent.user_agent import UserAgent
-from random_user_agent.params import SoftwareAgent, HardwareAgent
+ua = UserAgent()
 
-# Определяем типы агентов
-software_names = ['chrome', 'firefox', 'safari']
-hardware_types = ['desktop']  # Только десктопные
-
-# Создаём агенты
-software_agent = SoftwareAgent(software_names)
-hardware_agent = HardwareAgent(hardware_types)
-
-# Генерируем случайный User-Agent
-ua = UserAgent(software_agent, hardware_agent)
-
-# Печатаем случайный десктопный User-Agent
-print(ua.get_random_user_agent())
+# Генерация случайного десктопного User-Agent
+print(ua.random())
 ")
 
   # Определение языка и таймзоны на основе прокси
