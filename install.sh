@@ -222,14 +222,14 @@ for ((i=0; i<container_count; i++)); do
     -e LANGUAGE="$language" \
     -e LANG="$language" \
     -e TZ="$timezone" \
-    --user-agent="$user_agent" \
     $proxy_http \
     $proxy_https \
     -v "$config_dir:/config" \
     -p "$current_port:3000" \
     --shm-size="2gb" \
     --restart unless-stopped \
-    lscr.io/linuxserver/chromium:latest
+    lscr.io/linuxserver/chromium:latest \
+    --user-agent="$user_agent" 
 
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
