@@ -226,10 +226,10 @@ for ((i=0; i<container_count; i++)); do
     $proxy_https \
     -v "$config_dir:/config" \
     -p "$current_port:3000" \
+    -e USER_AGENT="$user_agent" \
     --shm-size="2gb" \
     --restart unless-stopped \
-    lscr.io/linuxserver/chromium:latest \
-    -e USER_AGENT="$user_agent"
+    lscr.io/linuxserver/chromium:latest
 
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
