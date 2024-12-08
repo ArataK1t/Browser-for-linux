@@ -140,8 +140,8 @@ generate_random_config() {
 from random_user_agent.user_agent import UserAgent
 ua = UserAgent()
 
-# Генерация случайного десктопного User-Agent
-print(ua.random())
+# Используем ua.get_random_user_agent() вместо random()
+print(ua.get_random_user_agent())
 ")
 
   # Определение языка и таймзоны на основе прокси
