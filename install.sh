@@ -23,7 +23,7 @@ fi
 show "Обновление системы и установка зависимостей..."
 sudo apt update && sudo apt upgrade -y
 
-for package in git curl python3 python3-pip jq; do
+for package in git curl geoip-bin jq python3-pip; do
   if ! [ -x "$(command -v $package)" ]; then
     show "Устанавливаю $package..."
     sudo apt install -y $package
@@ -32,7 +32,8 @@ for package in git curl python3 python3-pip jq; do
   fi
 done
 
-pip3 install --user fake_useragent
+# Установка fake_useragent
+pip3 install fake_useragent
 
 # Проверка и установка Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -98,27 +99,6 @@ if [ ${#PROXIES[@]} -lt "$container_count" ]; then
   exit 1
 fi
 
-# Генерация случайных настроек для каждого контейнера
-generate_random_config() {
-  # Используем fake_useragent для генерации фальшивого User-Agent (только десктопные)
-  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
-
-  # Определение языка и таймзоны на основе прокси
-  proxy_ip="$1"
-  geo_info=$(curl -s "http://ip-api.com/json/$proxy_ip?fields=country,timezone,languages")
-
-  country=$(echo "$geo_info" | jq -r '.country')
-  timezone=$(echo "$geo_info" | jq -r '.timezone')
-  language=$(echo "$geo_info" | jq -r '.languages' | cut -d',' -f1)  # Используем первый язык
-
-  # Случайные размеры экрана и масштаб
-  width=$(( RANDOM % 400 + 1366 ))  # Случайная ширина
-  height=$(( RANDOM % 200 + 768 )) # Случайная высота
-  scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}')  # Масштаб
-
-  echo "$user_agent,$country,$timezone,$language,$width,$height,$scale"
-}
-
 # Запрашиваем имя пользователя
 read -p "Введите имя пользователя: " USERNAME
 
@@ -153,7 +133,27 @@ else
   show "Образ Docker с Chromium успешно загружен."
 fi
 
-# Создание контейнеров
+# Функция для получения случайного User-Agent (только десктопные)
+generate_random_config() {
+  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
+
+  # Определение языка и таймзоны на основе прокси
+  proxy_ip="$1"
+  geo_info=$(curl -s "http://ip-api.com/json/$proxy_ip?fields=country,timezone,languages")
+
+  country=$(echo "$geo_info" | jq -r '.country')
+  timezone=$(echo "$geo_info" | jq -r '.timezone')
+  language=$(echo "$geo_info" | jq -r '.languages' | cut -d',' -f1)  # Используем первый язык
+
+  # Случайные размеры экрана и масштаб
+  width=$(( RANDOM % 400 + 1366 ))  # Случайная ширина
+  height=$(( RANDOM % 200 + 768 )) # Случайная высота
+  scale=$(awk -v min=1.0 -v max=1.5 'BEGIN{srand(); print min+(max-min)*rand()}')  # Масштаб
+
+  echo "$user_agent,$country,$timezone,$language,$width,$height,$scale"
+}
+
+# Генерация случайных параметров для прокси
 for ((i=0; i<container_count; i++)); do
   # Используем прокси из файла для каждого контейнера
   proxy="${PROXIES[$i]}"
@@ -167,7 +167,7 @@ for ((i=0; i<container_count; i++)); do
   # Разделяем детали прокси на ip и port
   IFS=':' read -r ip port <<< "$proxy_details"
 
-  # Генерация случайных параметров для прокси
+  # Генерация случайных настроек для каждого контейнера
   config=$(generate_random_config "$ip")
   user_agent=$(echo "$config" | cut -d, -f1)
   country=$(echo "$config" | cut -d, -f2)
@@ -176,6 +176,11 @@ for ((i=0; i<container_count; i++)); do
   width=$(echo "$config" | cut -d, -f5)
   height=$(echo "$config" | cut -d, -f6)
   scale=$(echo "$config" | cut -d, -f7)
+
+  # Прокси HTTP
+  proxy_http="-e HTTP_PROXY=http://$user:$pass@$ip:$port"
+  proxy_https="-e HTTPS_PROXY=http://$user:$pass@$ip:$port"
+  chromium_proxy_args="--proxy-server=http://$user:$pass@$ip:$port"
 
   current_port=$((start_port + i * 10))  # Каждый следующий контейнер на 10 портов дальше
 
@@ -203,18 +208,16 @@ for ((i=0; i<container_count; i++)); do
     -e CUSTOM_USER="$USERNAME" \
     -e PASSWORD="$PASSWORD" \
     -e LANGUAGE="$language" \
+    -e LANG="$language" \
     -e TZ="$timezone" \
     -e USER_AGENT="$user_agent" \
+    $proxy_http \
+    $proxy_https \
     -v "$config_dir:/config" \
     -p "$current_port:3000" \
     --shm-size="2gb" \
     --restart unless-stopped \
-    lscr.io/linuxserver/chromium:latest \
-    --window-size="${width}x${height}" \
-    --force-device-scale-factor="$scale" \
-    --user-agent="$user_agent" \
-    -e HTTP_PROXY="http://$user:$pass@$ip:$port" \
-    -e HTTPS_PROXY="http://$user:$pass@$ip:$port" \
+    lscr.io/linuxserver/chromium:latest
 
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
