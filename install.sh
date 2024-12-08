@@ -100,8 +100,8 @@ fi
 
 # Генерация случайных настроек для каждого контейнера
 generate_random_config() {
-  # Используем fake_useragent для генерации фальшивого User-Agent
-  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(); print(ua.random)')
+  # Используем fake_useragent для генерации фальшивого User-Agent (только десктопные)
+  user_agent=$(python3 -c 'from fake_useragent import UserAgent; ua = UserAgent(verify_ssl=False); print(ua.random)')
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
@@ -212,7 +212,9 @@ for ((i=0; i<container_count; i++)); do
     lscr.io/linuxserver/chromium:latest \
     --window-size="${width}x${height}" \
     --force-device-scale-factor="$scale" \
-    --user-agent="$user_agent"
+    --user-agent="$user_agent" \
+    -e HTTP_PROXY="http://$user:$pass@$ip:$port" \
+    -e HTTPS_PROXY="http://$user:$pass@$ip:$port" \
 
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
