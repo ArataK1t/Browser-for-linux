@@ -229,7 +229,7 @@ for ((i=0; i<container_count; i++)); do
     --shm-size="2gb" \
     --restart unless-stopped \
     lscr.io/linuxserver/chromium:latest \
-    --user-agent="$user_agent" 
+    -e USER_AGENT="$user_agent"
 
   if [ $? -eq 0 ]; then
     show "Контейнер $container_name_unique успешно запущен."
