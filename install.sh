@@ -222,7 +222,7 @@ for ((i=0; i<container_count; i++)); do
     -e LANGUAGE="$language" \
     -e LANG="$language" \
     -e TZ="$timezone" \
-    -e USER_AGENT="$user_agent" \
+    --user-agent="$user_agent" \
     $proxy_http \
     $proxy_https \
     -v "$config_dir:/config" \
