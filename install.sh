@@ -136,14 +136,18 @@ fi
 # Генерация случайных настроек для каждого контейнера
 generate_random_config() {
   # Генерация случайного User-Agent с помощью Python, вызванного внутри bash-скрипта
-  user_agent=$(python3 -c "
+ user_agent=$(python3 -c "
 from random_user_agent.user_agent import UserAgent
-ua = UserAgent()
 
-# Используем ua.get_random_user_agent() вместо random()
-print(ua.get_random_user_agent())
+# Указываем, что нам нужны только десктопные User-Agent'ы
+ua = UserAgent(software_names=['windows', 'mac', 'linux'])
+
+# Получаем случайный User-Agent для десктопа
+user_agent = ua.get_random_user_agent()
+
+# Печатаем результат
+print(user_agent)
 ")
-echo "Передача USER_AGENT: $user_agent"
 
   # Определение языка и таймзоны на основе прокси
   proxy_ip="$1"
