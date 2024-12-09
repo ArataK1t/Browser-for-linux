@@ -32,9 +32,6 @@ for package in git curl geoip-bin jq python3-pip; do
   fi
 done
 
-# Установка fake_useragent
-pip install random-user-agent
-
 # Проверка и установка Docker
 if ! [ -x "$(command -v docker)" ]; then
   show "Установка Docker..."
@@ -137,16 +134,26 @@ fi
 generate_random_config() {
   # Генерация случайного User-Agent с помощью Python, вызванного внутри bash-скрипта
  user_agent=$(python3 -c "
-from random_user_agent.user_agent import UserAgent
+import random
 
-# Указываем, что нам нужны только десктопные User-Agent'ы
-ua = UserAgent(software_names=['chrome', 'firefox', 'safari'], platforms=['windows', 'mac', 'linux'])
+desktop_user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
+    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:90.0) Gecko/20100101 Firefox/90.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Version/14.0.3 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Version/13.1 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Version/12.1 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Version/15.1 Safari/537.36'
+]
 
-# Получаем случайный User-Agent для десктопа
-user_agent = ua.get_random_user_agent()
-
-# Печатаем результат
+user_agent = random.choice(desktop_user_agents)
 print(user_agent)
+
 ")
 
   # Определение языка и таймзоны на основе прокси
@@ -156,6 +163,17 @@ print(user_agent)
   country=$(echo "$geo_info" | jq -r '.country')
   timezone=$(echo "$geo_info" | jq -r '.timezone')
   language=$(echo "$geo_info" | jq -r '.languages' | cut -d',' -f1)  # Используем первый язык
+
+  # Преобразование в нужный формат для LANG и LANGUAGE
+  case "$language" in
+    "English") language="en_US.UTF-8" ;;
+    "Spanish") language="es_ES.UTF-8" ;;
+    "French") language="fr_FR.UTF-8" ;;
+    "German") language="de_DE.UTF-8" ;;
+    "Russian") language="ru_RU.UTF-8" ;;
+    "Chinese") language="zh_CN.UTF-8" ;;
+    *) language="en_US.UTF-8" ;;  # По умолчанию английский, если язык не распознан
+  esac
 
   # Случайные размеры экрана и масштаб
   width=$(( RANDOM % 400 + 1366 ))  # Случайная ширина
