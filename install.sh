@@ -172,6 +172,7 @@ print(user_agent)
     "German") language="de_DE.UTF-8" ;;
     "Russian") language="ru_RU.UTF-8" ;;
     "Chinese") language="zh_CN.UTF-8" ;;
+    "Polish") language="pl_PL.UTF-8" ;;
     *) language="en_US.UTF-8" ;;  # По умолчанию английский, если язык не распознан
   esac
 
